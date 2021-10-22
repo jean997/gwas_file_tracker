@@ -1,6 +1,7 @@
 import argparse
 import os
 import pandas as pd
+import numpy as np
 import random
 import string
 import subprocess
@@ -12,13 +13,13 @@ from datetime import datetime
 def get_args():
     parser = argparse.ArgumentParser(description='Download and document GWAS summary statistics and associated files. \
                               There are three ways to use this utility: \
-                              1) Add a single new trait by using at least --url-main and as many other options as desired. \
+                              1) Add a single new trait by using at least --url and as many other options as desired. \
                               2) Update an existing entry using --update-entry, --study-id, --trait-id \
                               and relevant other options. 3) Add new traits in bulk from a csv file using --from-file. In all cases \
                               a single positional argument specifying the file name of the catalog is required.')
     parser.add_argument('index', nargs=1, help='Name of csv file cataloging the contents of the directory. \
                                                    If the named file does not exist, it will be created.')
-    parser.add_argument('--url-main', dest='url', default='',
+    parser.add_argument('--url', dest='url', default='',
                         help='Single URL location of the data.')
     parser.add_argument('--url-assoc', dest='url_plus', nargs='+', default=[],
                         help='URL location(s) of associated files such as readmes or .tbi files.')
@@ -26,26 +27,32 @@ def get_args():
                         help='Trait name. Spaces will be converted to underscores.')
     parser.add_argument('--pmid', dest='pmid', default='',
                         help='PubMed ID for associated publication. For un-published data, publications without a PubMed ID, or other cases, you can choose any string instead or leave out (see --study-id)')
-    parser.add_argument('--author', dest='auth', default='',
+    parser.add_argument('--author', dest='author', default='',
                         help='First author of publication or consortium (or similar for data not associated with a publication).')
     parser.add_argument('--year"', dest='year', default='',
                         help='Year of publication.')
-    parser.add_argument('--sample-size', dest='ss', default='',
+    parser.add_argument('--sample-size', dest='sample_size', default='',
                         help='Publication sample size. (Usually this is max sample size over SNPs).')
     parser.add_argument('--note', dest='note', default='',
                         help='Additional information')
-    parser.add_argument('--study-id', dest='study_id',
-                        help='Study ID string. If not provided, study_id will default to <auth>_<year>_<pmid> or a random string.')
-    parser.add_argument('--trait-id', dest='trait_id',
-                        help='Unique trait id. The combination of study ID and trait ID must be unique (not already present in the index). Trait ID will default to trait name or random string.')
+    parser.add_argument('--study-id', dest='study_id', default='',
+                        help='Study ID string. If not provided, study_id will default to <auth>_<year>_<pmid> or \
+                             a random string.')
+    parser.add_argument('--trait-id', dest='trait_id', default='',
+                        help='Unique trait id. The combination of study ID and trait ID must be unique \
+                        (not already present in the index). Trait ID will default to trait name or random string.')
     parser.add_argument('--update-entry', dest='upd', action='store_true',
-                        help='This argument can be used to add associated files to an existing entry or to add or update information such as author, year, and PMID without re-downloading data. Adding this information will not change the study or trait id which cannot be modified.')
+                        help='This argument can be used to add associated files to an existing entry or to add or \
+                             update information such as author, year, and PMID without re-downloading data. Adding \
+                             this information will not change the study or trait id which cannot be modified.')
     parser.add_argument('--from-file', dest='csv', default='',
-                        help='Add files from information stored in a csv. The file should contain at minimum a column url_main.  \
-                  Optional additional columns are: url_assoc, pmid, author, year, trait, sample_size, note, study_id, trait_id. \
-                              All other columns will be ignored. url_assoc can contain a comma separated list of urls with or without white space. \
-                  If --from-file is used, no other options may be supplied. \
-                              This option cannot be used to update existing entries. ')
+                        help='Add files from information stored in a csv. The file should contain at minimum a column \
+                              url for main url.  Optional additional columns are: url_assoc, pmid, author, year, trait, \
+                              sample_size, note, study_id, trait_id. \
+                              All other columns will be ignored. url_assoc can contain a comma separated list of \
+                              urls with or without white space. \
+                              If --from-file is used, no other options may be supplied. Lines with url_main empty \
+                              will  be interpreted as updates to existing entries.')
 
     args = parser.parse_args()
     return args
@@ -81,10 +88,21 @@ def read_index(file, upd):
     return tab
 
 
+def read_add(file, features):
+    new_dat = pd.read_csv(file, header=0, dtype='str')
+    if 'url' not in new_dat.columns:
+        raise Exception('url_main must be present in {file}')
+    new_dat.replace(np.nan, '', inplace = True)
+    my_vars = ["study_id", "trait_id", "url_assoc"] + features
+    for v in my_vars:
+        if v not in new_dat.columns:
+            new_dat[f'{v}'] = ''
+    return new_dat
+
+
 def check_args(args, ref):
-# Check arguments
     if args.url == '' and args.csv == '' and args.upd is False:
-        raise Exception('You must specify one of --url-main, --from-file or --update-entry.')
+        raise Exception('You must specify one of --url, --from-file or --update-entry.')
 
     if args.upd and len(args.url)>0:
         raise Exception('If using --update-entry you may not add a main file.')
@@ -100,20 +118,23 @@ def check_args(args, ref):
                 f'A file has already been downloaded from {u}. To replace it, delete the file and the entry in the index.')
 
     if args.upd:
-        if args.study_id is None or args.trait_id is None:
+        if args.study_id == '' or args.trait_id == '':
             raise Exception('To update an entry, please supply study id and trait id.')
 
+
 def init_entry(args, ref):
-    if args.study_id is not None:
+    if args.study_id != '':
         study_id = args.study_id
-    elif len(args.auth) > 0 and len(args.year) > 0 and len(args.pmid) > 0:
-        study_id = f'{args.auth}_{args.year}_{args.pmid}'
+    elif args.author != '' and args.year != '' and args.pmid != '':
+        study_id = f'{args.author}_{args.year}_{args.pmid}'
     else:
         study_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    study_id = study_id.replace(' ', '')
 
-    # Assign unique trait ID
-    if len(args.trait) > 0:
-        trait_id = "_".join(args.trait.split())
+    if args.trait_id != "":
+        trait_id = args.trait_id.replace(' ', '_')
+    elif args.trait != '':
+        trait_id = args.trait.replace(' ', '_')
     else:
         trait_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
 
@@ -161,14 +182,15 @@ def update_entry(ref, full_id, args): #pmid, auth, year, trait, ss, note, full_i
     other_ref = ref.query(f'full_id != "{full_id}"')
     # print(len(other_tab))
     my_ref, args.pmid = check_and_replace(my_ref, "pmid", args.pmid)
-    my_ref, args.auth = check_and_replace(my_ref, "author", args.auth)
+    my_ref, args.author = check_and_replace(my_ref, "author", args.author)
     my_ref, args.year = check_and_replace(my_ref, "year", args.year)
     my_ref, args.trait = check_and_replace(my_ref, "trait", args.trait)
-    my_ref, args.ss = check_and_replace(my_ref, "sample_size", args.ss)
+    my_ref, args.sample_size = check_and_replace(my_ref, "sample_size", args.sample_size)
     my_ref, args.note = check_and_replace(my_ref, "note", args.note)
     # print("Done checking")
     ref_full = pd.concat([other_ref, my_ref])
     return ref_full, args
+
 
 def add_files(urls, pmid, auth, year, trait, ss, note, sid, tid, ft):
     n = len(urls)
@@ -192,23 +214,41 @@ def add_files(urls, pmid, auth, year, trait, ss, note, sid, tid, ft):
                             'note': [note] * n})
     return new_ref
 
-
-
-if __name__ == '__main__':
-    args = get_args()
-    ref = read_index(args.index[0], args.upd)
-    check_args(args, ref)
+def run_one_study(args, ref):
     if args.upd:
         full_id = f'{args.study_id}__{args.trait_id}'
         ref, args = update_entry(ref, full_id, args)
         if len(args.url_plus)>0:
             ft = ["associated"]*len(args.url_plus)
-            new_ref = add_files(args.url_plus, args.pmid, args.auth, args.year, args.trait, args.ss,args.note, args.study_id, args.trait_id, ft)
+            new_ref = add_files(args.url_plus, args.pmid, args.author, args.year, args.trait, args.sample_size,args.note,
+                                args.study_id, args.trait_id, ft)
             ref = pd.concat([ref, new_ref])
-    elif args.url != '':
+    else:
         sid, tid, fid = init_entry(args, ref)
         urls = [args.url] + args.url_plus
         ft = ["main"] + ["associated"]*len(args.url_plus)
-        new_ref = add_files(urls, args.pmid, args.auth, args.year, args.trait, args.ss, args.note, sid, tid, ft)
+        new_ref = add_files(urls, args.pmid, args.author, args.year, args.trait, args.sample_size, args.note, sid, tid, ft)
         ref = pd.concat([ref, new_ref])
-    ref.to_csv(args.index[0], index=False)
+    return ref
+
+if __name__ == '__main__':
+    args = get_args()
+    ref = read_index(args.index[0], args.upd)
+    check_args(args, ref)
+    if not args.csv:
+        ref = run_one_study(args, ref)
+        ref.to_csv(args.index[0], index=False)
+    elif args.csv:
+        features = ['pmid', 'author', 'year', 'trait', 'sample_size', 'note']
+        add_ref = read_add(args.csv, features)
+        for i in range(len(add_ref)):
+            my_args = add_ref.loc[i, :]
+            if my_args.url_assoc == '':
+                my_args.url_plus = []
+            else:
+                my_args.url_plus = [i.strip() for i in my_args.url_assoc.split(',')]
+            my_args.csv = False
+            my_args.upd = my_args.url == ''
+            check_args(my_args, ref)
+            ref = run_one_study(my_args, ref)
+            ref.to_csv(args.index[0], index=False)
