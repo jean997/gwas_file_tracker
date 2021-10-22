@@ -8,4 +8,6 @@ pip install wget
 
 To do: 
 + Add directory checker to check consistency of directory contents and index file. 
-+ Add `--from-file` option for get\_stats
++ Add `--from-file` option for get\_stats (done)
++ Add cleanup function in case of failures
++ Make file features more flexible
