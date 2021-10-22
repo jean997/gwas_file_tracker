@@ -26,9 +26,12 @@ def get_args():
     parser.add_argument('--trait', dest='trait', default='',
                         help='Trait name. Spaces will be converted to underscores.')
     parser.add_argument('--pmid', dest='pmid', default='',
-                        help='PubMed ID for associated publication. For un-published data, publications without a PubMed ID, or other cases, you can choose any string instead or leave out (see --study-id)')
+                        help='PubMed ID for associated publication. For un-published data, publications without a \
+                              PubMed ID, or other cases, you can choose any string instead or leave out \
+                              (see --study-id)')
     parser.add_argument('--author', dest='author', default='',
-                        help='First author of publication or consortium (or similar for data not associated with a publication).')
+                        help='First author of publication or consortium (or similar for data not \
+                              associated with a publication).')
     parser.add_argument('--year"', dest='year', default='',
                         help='Year of publication.')
     parser.add_argument('--sample-size', dest='sample_size', default='',
@@ -53,6 +56,10 @@ def get_args():
                               urls with or without white space. \
                               If --from-file is used, no other options may be supplied. Lines with url_main empty \
                               will  be interpreted as updates to existing entries.')
+    parser.add_argument('--check-directory', dest='check', action='store_true',
+                        help='Check the contents of the directory against the index file. Results will be written \
+                               to a file named report.datetime. If used in combination with other options, directory \
+                               check will be performed first')
 
     args = parser.parse_args()
     return args
@@ -83,7 +90,8 @@ def read_index(file, upd, create_backup=True):
         if create_backup:
             save_file = f'{file}.{"_".join(str(datetime.now()).split())}'
             print(
-                f'Backing up {file} to {save_file}. If you are satisfied with the results of this operation, you may delete the backup.\n')
+                f'Backing up {file} to {save_file}. If you are satisfied with \
+                  the results of this operation, you may delete the backup.\n')
             subprocess.run(f'cp {file} {save_file}', shell=True)
         tab = pd.read_csv(file, header=0, dtype='str')
     validate_index(tab)
@@ -94,7 +102,7 @@ def read_add(file, features):
     new_dat = pd.read_csv(file, header=0, dtype='str')
     if 'url' not in new_dat.columns:
         raise Exception('url_main must be present in {file}')
-    new_dat.replace(np.nan, '', inplace = True)
+    new_dat.replace(np.nan, '', inplace=True)
     my_vars = ["study_id", "trait_id", "url_assoc"] + features
     for v in my_vars:
         if v not in new_dat.columns:
@@ -103,16 +111,17 @@ def read_add(file, features):
 
 
 def check_args(args, ref):
-    if args.url == '' and args.csv == '' and args.upd is False:
-        raise Exception('You must specify one of --url, --from-file or --update-entry.')
+    if args.url == '' and args.csv == '' and not args.upd and not args.check:
+        raise Exception('You must specify one of --url, --from-file, --update-entry, or --check-directory.')
 
-    if args.upd and len(args.url)>0:
+    if args.upd and len(args.url) > 0:
         raise Exception('If using --update-entry you may not add a main file.')
 
     # Check that files don't already exist
     if args.url in ref.url.values:
         raise Exception(
-            f'A file has already been downloaded from {args.url}. To replace it, delete the file and the entry in the index.')
+            f'A file has already been downloaded from {args.url}. \
+            To replace it, delete the file and the entry in the index.')
 
     for u in args.url_plus:
         if u in ref.url.values:
@@ -210,7 +219,10 @@ def check_directory(ref, dir=".", report_file=''):
     doc_files_notok = []
     undoc_files = []
     for d in doc_dirs:
-        fls = [f'{d}/{f}' for f in os.listdir(d)]
+        fls = []
+        for root, dirs, files in os.walk(d):
+            my_fls = [f'{root}/{f}' for f in files]
+            fls.extend(my_fls)
         for f in fls:
             if not f in ref.file.values:
                 print(f'{f} is undocumented')
@@ -228,18 +240,17 @@ def check_directory(ref, dir=".", report_file=''):
     if len(missing_files) > 0:
         print(f'Some files are documented but not present.')
     if len(report_file) >0:
-        f = open(report_file, "w")
-        f.writelines([f'Directory report written on {str(date.today())}\n\n',
-                      f'I found {len(doc_dirs) + len(undoc_dirs)} directories.\n',
-                      f'There are {len(undoc_dirs)} undocumented directories:\n'])
-        f.writelines([f'{d}\n' for d in undoc_dirs])
-        f.writelines([f'\nWithin documented directories, I found \n',
-                      f'{len(doc_files_ok)} files which are documented with matching md5 checksums\n',
-                      f'{len(doc_files_notok)} files which are documented but have non-matching md5 checksums:\n'])
-        f.writelines([f'{d}\n' for d in doc_files_notok])
-        f.writelines([f'{len(undoc_files)} file which are undocumented:\n'])
-        f.writelines([f'{d}\n' for d in undoc_files])
-        f.close()
+        with open(report_file, "w") as f:
+            f.writelines([f'Directory report written on {str(date.today())}\n\n',
+                          f'I found {len(doc_dirs) + len(undoc_dirs)} directories.\n',
+                          f'There are {len(undoc_dirs)} undocumented directories:\n'])
+            f.writelines([f'{d}\n' for d in undoc_dirs])
+            f.writelines([f'\nWithin documented directories, I found \n',
+                          f'{len(doc_files_ok)} files which are documented with matching md5 checksums\n',
+                          f'{len(doc_files_notok)} files which are documented but have non-matching md5 checksums:\n'])
+            f.writelines([f'{d}\n' for d in doc_files_notok])
+            f.writelines([f'{len(undoc_files)} file which are undocumented:\n'])
+            f.writelines([f'{d}\n' for d in undoc_files])
 
 
 
@@ -300,6 +311,9 @@ if __name__ == '__main__':
     args = get_args()
     ref = read_index(args.index[0], args.upd)
     check_args(args, ref)
+    if args.check:
+        report_file = f'report.{"_".join(str(datetime.now()).split())}'
+        check_directory(ref, dir = ".", report_file=report_file)
     if not args.csv:
         ref = run_one_study(args, ref)
         ref.to_csv(args.index[0], index=False)
@@ -314,6 +328,7 @@ if __name__ == '__main__':
                 my_args.url_plus = [i.strip() for i in my_args.url_assoc.split(',')]
             my_args.csv = False
             my_args.upd = my_args.url == ''
+            my_args.check = False
             check_args(my_args, ref)
             ref = run_one_study(my_args, ref)
             ref.to_csv(args.index[0], index=False)
