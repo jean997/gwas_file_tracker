@@ -249,7 +249,7 @@ def check_directory(ref, dir=".", report_file=''):
                           f'{len(doc_files_ok)} files which are documented with matching md5 checksums\n',
                           f'{len(doc_files_notok)} files which are documented but have non-matching md5 checksums:\n'])
             f.writelines([f'{d}\n' for d in doc_files_notok])
-            f.writelines([f'{len(undoc_files)} file which are undocumented:\n'])
+            f.writelines([f'\n{len(undoc_files)} file which are undocumented:\n'])
             f.writelines([f'{d}\n' for d in undoc_files])
 
 
@@ -314,7 +314,7 @@ if __name__ == '__main__':
     if args.check:
         report_file = f'report.{"_".join(str(datetime.now()).split())}'
         check_directory(ref, dir = ".", report_file=report_file)
-    if not args.csv:
+    if args.upd or args.url != '':
         ref = run_one_study(args, ref)
         ref.to_csv(args.index[0], index=False)
     elif args.csv:
