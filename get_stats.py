@@ -59,7 +59,7 @@ def get_args():
 
 
 # Read index or create if not existing
-def read_index(file, upd):
+def read_index(file, upd, create_backup=True):
     if not os.path.exists(file):
         if upd:
             raise Exception("Index file must exist if using --update-entry.")
@@ -80,11 +80,13 @@ def read_index(file, upd):
                'note': []}
         tab = pd.DataFrame(tab)
     else:
-        save_file = f'{file}.{"_".join(str(datetime.now()).split())}'
-        print(
-            f'Backing up {file} to {save_file}. If you are satisfied with the results of this operation, you may delete the backup.\n')
-        subprocess.run(f'cp {file} {save_file}', shell=True)
+        if create_backup:
+            save_file = f'{file}.{"_".join(str(datetime.now()).split())}'
+            print(
+                f'Backing up {file} to {save_file}. If you are satisfied with the results of this operation, you may delete the backup.\n')
+            subprocess.run(f'cp {file} {save_file}', shell=True)
         tab = pd.read_csv(file, header=0, dtype='str')
+    validate_index(tab)
     return tab
 
 
@@ -192,6 +194,55 @@ def update_entry(ref, full_id, args): #pmid, auth, year, trait, ss, note, full_i
     return ref_full, args
 
 
+def check_directory(ref, dir=".", report_file=''):
+    dirs = os.listdir(dir)
+    doc_dirs = []
+    undoc_dirs = []
+    while len(dirs) > 0:
+        x = dirs.pop(0)
+        if os.path.isdir(x) and not x.startswith(".") and not x.startswith("_"):
+            if x in ref.study_id.values:
+                doc_dirs.append(x)
+            else:
+                print(f'{x} is undocumented')
+                undoc_dirs.append(x)
+    doc_files_ok = []
+    doc_files_notok = []
+    undoc_files = []
+    for d in doc_dirs:
+        fls = [f'{d}/{f}' for f in os.listdir(d)]
+        for f in fls:
+            if not f in ref.file.values:
+                print(f'{f} is undocumented')
+                undoc_files.append(f)
+            else:
+                m5out = subprocess.run(f'md5sum "{f}"', capture_output=True, text=True, shell=True)
+                m5 = m5out.stdout.split()[0]
+                i = list(ref.file.values).index(f)
+                if m5 == ref.md5[i]:
+                    doc_files_ok.append(f)
+                else:
+                    doc_files_notok.append(f)
+                    print(f'{f} is documented but md5 sums do not match')
+    missing_files = list(set(ref.file) - set(doc_files_ok))
+    if len(missing_files) > 0:
+        print(f'Some files are documented but not present.')
+    if len(report_file) >0:
+        f = open(report_file, "w")
+        f.writelines([f'Directory report written on {str(date.today())}\n\n',
+                      f'I found {len(doc_dirs) + len(undoc_dirs)} directories.\n',
+                      f'There are {len(undoc_dirs)} undocumented directories:\n'])
+        f.writelines([f'{d}\n' for d in undoc_dirs])
+        f.writelines([f'\nWithin documented directories, I found \n',
+                      f'{len(doc_files_ok)} files which are documented with matching md5 checksums\n',
+                      f'{len(doc_files_notok)} files which are documented but have non-matching md5 checksums:\n'])
+        f.writelines([f'{d}\n' for d in doc_files_notok])
+        f.writelines([f'{len(undoc_files)} file which are undocumented:\n'])
+        f.writelines([f'{d}\n' for d in undoc_files])
+        f.close()
+
+
+
 def add_files(urls, pmid, auth, year, trait, ss, note, sid, tid, ft):
     n = len(urls)
     if len(ft) != n:
@@ -230,6 +281,20 @@ def run_one_study(args, ref):
         new_ref = add_files(urls, args.pmid, args.author, args.year, args.trait, args.sample_size, args.note, sid, tid, ft)
         ref = pd.concat([ref, new_ref])
     return ref
+
+def validate_index(ref):
+    req_vars = ['study_id', 'trait_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type']
+    if any([i not in ref.columns for i in req_vars]):
+        raise Exception(f'Reference file is missing at least one of the required columns: study_id, trait_id, full_id, \
+                          file, date_downloaded md5, and type.')
+    for v in req_vars:
+        if any(ref[f'{v}'].isnull()):
+            raise Exception(f'Reference file has missing information in {v} which is a required column.')
+    #Check for duplicated files or uls
+    if not len(ref.file) == len(set(ref.file)):
+        raise Exception("There are duplicated files.")
+    if not len(ref.url) == len(set(ref.url)):
+        raise Exception("There are duplicated urls.")
 
 if __name__ == '__main__':
     args = get_args()
