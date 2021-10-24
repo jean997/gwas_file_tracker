@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 import pandas as pd
 import numpy as np
 import random
@@ -35,7 +34,7 @@ def get_args():
                         help='Unique unit id. The combination of subject ID and unit ID must be unique \
                         (not already present in the index for new units). \
                         The default for unit ID can be specified in a yml file or will be a random string.')
-    parser.add_argument('--features', dest='features', nargs='+', action='append', default = [],
+    parser.add_argument('--features', dest='features', nargs='+', default=[],
                         help='Specify additional features in the format feature:value. If value contains white space, \
                               use quotes as in --features "trait:body mass index"')
     parser.add_argument('--update-entry', dest='upd', action='store_true',
@@ -61,6 +60,7 @@ def get_args():
 
 
 def parse_features(flist):
+    #print(flist)
     if len(flist) == 0:
         d = {}
         return(d)
@@ -195,10 +195,11 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
 def check_and_replace(df, var, value):
     if value == '':
         return df, df[f'{var}'][0]
-    if any(df[f'{var}'].notnull()):
-        print(f'{var} already contains non-missing values. These will be over-written.')
+    if var in df.columns:
+        if any(df[f'{var}'].notnull()):
+            print(f'{var} already contains non-missing values. These will be over-written.')
     df[f'{var}'] = value
-    return df, df[f'{var}'][0]
+    return df
 
 
 def get_files(urls, dest_dir):
@@ -215,17 +216,14 @@ def get_files(urls, dest_dir):
 # ref should have already been validated by the time it gets here
 # vals should be a dictionary of supplementary features
 def update_entry(ref, full_id, vals):
-    my_ref = ref.query(f'full_id == "{full_id}"')
+    my_ref = ref.query(f'full_id == "{full_id}"').loc[:, :]
     # required variables can't be changed by update entry
     req_vars = ['subject_id', 'unit_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type']
     other_ref = ref.query(f'full_id != "{full_id}"')
     # Only supplementary information can be changed
     feats = set(vals.keys()) - set(req_vars)
     for f in feats:
-        if f in ref.columns:
-            my_ref, vals[f'{f}'] = check_and_replace(my_ref, f, vals[f'{f}'])
-        else:
-            my_ref[f'{f}'] = vals[f'{f}']
+        my_ref = check_and_replace(my_ref, f, vals[f'{f}'])
     ref_full = pd.concat([other_ref, my_ref])
     ref_full = ref_full.replace(np.nan, '')
     return ref_full
@@ -312,7 +310,7 @@ def run_one_study(args, ref, inp_features):
             ref = ref.replace(np.nan, '')
     else:
         config = read_config(args.config)
-        sid, uid, fid = init_entry(args, ref, config['subjet_id'], config['unit_id'])
+        sid, uid, fid = init_entry(args, ref, inp_features, config['subject_id'], config['unit_id'])
         urls = [args.url] + args.url_plus
         ft = ["main"] + ["associated"]*len(args.url_plus)
         new_ref = add_files(urls, ft, sid, uid, fid, inp_features)
@@ -336,13 +334,14 @@ def validate_index(ref):
 
 if __name__ == '__main__':
     parser = get_args()
-    args = parser.parse_args(sys.argv[0])
+    args = parser.parse_args()
     ref = read_index(args.index[0], args.upd) # validate is called at the end of read_index so we can now assume index is valid
     check_args(args, ref)
     if args.check:
         report_file = f'report.{"_".join(str(datetime.now()).split())}'
         check_directory(ref, dir=".", report_file=report_file)
     if args.upd or args.url != '':
+        #print(args.features)
         inp_feats = parse_features(args.features)
         ref = run_one_study(args, ref, inp_features=inp_feats)
         ref.to_csv(args.index[0], index=False)
