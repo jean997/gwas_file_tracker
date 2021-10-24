@@ -1,0 +1,4 @@
+url,author,year,pmid,trait,url_assoc,subject_id,unit_id
+https://github.com/jean997/gwas_file_tracker/blame/main/test_files/five.txt,Jack Skellington,1993,1,pumpkins,,,
+https://github.com/jean997/gwas_file_tracker/blame/main/test_files/six.txt,,,2,ghosts,"https://github.com/jean997/gwas_file_tracker/blame/main/test_files/seven.txt,https://github.com/jean997/gwas_file_tracker/blame/main/test_files/eight.txt",,
+,,2022,,,,Jean_2021_0,example-trait-three
