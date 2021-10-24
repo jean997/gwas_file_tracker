@@ -1,0 +1,9 @@
+# YAML Document starts with ---
+# Comments start with #
+---
+subject_id: 
+        - author
+        - year
+        - pmid
+unit_id: 
+        - trait
