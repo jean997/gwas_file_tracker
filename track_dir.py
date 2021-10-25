@@ -197,13 +197,13 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
     return args.subject_id, args.unit_id, full_id
 
 
-def check_and_replace(df, var, value):
+def check_and_replace(df, idx, var, value):
     if value == '':
         return df
     if var in df.columns:
-        if any(df[f'{var}'].notnull()):
+        if any(df[var].notnull()):
             print(f'{var} already contains non-missing values. These will be over-written.')
-    df[f'{var}'] = value
+    df.loc[idx, var] = value
     return df
 
 
@@ -221,16 +221,16 @@ def get_files(urls, dest_dir):
 # ref should have already been validated by the time it gets here
 # vals should be a dictionary of supplementary features
 def update_entry(ref, full_id, vals):
-    my_ref = ref.query(f'full_id == "{full_id}"')
+    my_idx = ref.query(f'full_id == "{full_id}"').index().to_list()
     # required variables can't be changed by update entry
-    other_ref = ref.query(f'full_id != "{full_id}"')
+    # other_ref = ref.query(f'full_id != "{full_id}"')
     # Only supplementary information can be changed
     new_feats = set(vals.keys()) - set(req_vars())
     for f in new_feats:
-        my_ref = check_and_replace(my_ref, f, vals[f'{f}'])
-    ref_full = pd.concat([other_ref, my_ref], ignore_index=True)
-    ref_full = ref_full.replace(np.nan, '')
-    return ref_full
+        ref = check_and_replace(ref, my_idx, f, vals[f])
+    # ref_full = pd.concat([other_ref, my_ref], ignore_index=True)
+    ref = ref.replace(np.nan, '')
+    return ref
 
 def check_directory(ref, dir=".", report_file=''):
     dirs = os.listdir(dir)
