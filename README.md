@@ -153,5 +153,5 @@ pip install wget
 To do: 
 + Add directory checker to check consistency of directory contents and index file. (done)
 + Add `--from-file` option for get\_stats (done)
-+ Make file features more flexible (in progres)
-  + Update features behaving incorrectly
++ Make file features more flexible (done)
++ Add file name prefix

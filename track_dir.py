@@ -120,8 +120,8 @@ def read_index(file, upd, create_backup=True, default_features=()):
         if create_backup:
             save_file = f'{file}.{"_".join(str(datetime.now()).split())}'
             print(
-                f'Backing up {file} to {save_file}. If you are satisfied with \
-                  the results of this operation, you may delete the backup.\n')
+                f'Backing up {file} to {save_file}. If you are satisfied with' \
+                  'the results of this operation, you may delete the backup.\n')
             subprocess.run(f'cp {file} {save_file}', shell=True)
         tab = pd.read_csv(file, header=0, dtype='str')
     validate_index(tab)
@@ -147,13 +147,13 @@ def check_args(args, ref):
         raise Exception('If using --update-entry you may not add a main file.')
 
     # Check that files don't already exist
-    if args.url in ref.url.values:
+    if args.url in ref.url.to_list():
         raise Exception(
             f'A file has already been downloaded from {args.url}. \
             To replace it, delete the file and the entry in the index.')
 
     for u in args.url_plus:
-        if u in ref.url.values:
+        if u in ref.url.to_list():
             raise Exception(
                 f'A file has already been downloaded from {u}. To replace it, delete the file and the entry in the index.')
 
@@ -169,7 +169,7 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
                 if all([inp_features[f'{f}'] != '' for f in subj_feats]):
                     args.subject_id = '_'.join([inp_features[f'{f}'] for f in subj_feats])
     if args.subject_id == '':
-       args.subject_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+       args.subject_id = 'download_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     args.subject_id = args.subject_id.replace(' ', '-')
 
     if args.unit_id == "":
@@ -184,7 +184,7 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
     full_id = f'{args.subject_id}__{args.unit_id}'
 
     # Check if unique name is used already
-    if full_id in ref.full_id.values:
+    if full_id in ref.full_id.to_list():
         raise Exception(f'{full_id} has already been used.')
 
     # Check if subject_id directory exists
@@ -239,7 +239,7 @@ def check_directory(ref, dir=".", report_file=''):
     while len(dirs) > 0:
         x = dirs.pop(0)
         if os.path.isdir(x) and not x.startswith(".") and not x.startswith("_"):
-            if x in ref.subject_id.values:
+            if x in ref.subject_id.to_list():
                 doc_dirs.append(x)
             else:
                 print(f'{x} is undocumented')
@@ -253,13 +253,13 @@ def check_directory(ref, dir=".", report_file=''):
             my_fls = [f'{root}/{f}' for f in files]
             fls.extend(my_fls)
         for f in fls:
-            if not f in ref.file.values:
+            if not f in ref.file.to_list():
                 print(f'{f} is undocumented')
                 undoc_files.append(f)
             else:
                 m5out = subprocess.run(f'md5sum "{f}"', capture_output=True, text=True, shell=True)
                 m5 = m5out.stdout.split()[0]
-                i = list(ref.file.values).index(f)
+                i = list(ref.file).index(f)
                 if m5 == ref.md5[i]:
                     doc_files_ok.append(f)
                 else:
@@ -280,6 +280,7 @@ def check_directory(ref, dir=".", report_file=''):
             f.writelines([f'{d}\n' for d in doc_files_notok])
             f.writelines([f'\n{len(undoc_files)} file which are undocumented:\n'])
             f.writelines([f'{d}\n' for d in undoc_files])
+        print(f'Full report saved in {report_file}')
 
 
 def add_files(urls, ft, sid, uid, fid, vals):
@@ -312,7 +313,7 @@ def run_one_study(args, ref, inp_features, config):
             #print(new_features)
             #print(req_vars())
             other_features = (set(ref.columns) - set(req_vars())) - set(new_features)
-            print(other_features)
+            # print(other_features)
             my_ref = ref.query(f'full_id == "{full_id}"')
             for f in other_features:
                 inp_features[f'{f}'] = my_ref[f'{f}'].iloc[0]
@@ -377,3 +378,4 @@ if __name__ == '__main__':
             inp_features = my_line[adtl_features].to_dict()
             ref = run_one_study(my_args, ref, inp_features=inp_features, config=config)
             ref.to_csv(args.index[0], index=False)
+    print()
