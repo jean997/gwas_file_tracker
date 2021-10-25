@@ -58,6 +58,9 @@ def get_args():
     #return args
     return parser
 
+def req_vars():
+    req_vars = ['subject_id', 'unit_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type', 'url']
+    return req_vars
 
 def parse_features(flist):
     #print(flist)
@@ -175,7 +178,7 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
                 if all([inp_features[f'{f}'] != '' for f in unit_feats]):
                     args.unit_id = '_'.join([inp_features[f'{f}'] for f in unit_feats])
     if args.unit_id == '':
-        args.unit_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        args.unit_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     args.unit_id = args.unit_id.replace(' ', '-')
 
     full_id = f'{args.subject_id}__{args.unit_id}'
@@ -218,15 +221,14 @@ def get_files(urls, dest_dir):
 # ref should have already been validated by the time it gets here
 # vals should be a dictionary of supplementary features
 def update_entry(ref, full_id, vals):
-    my_ref = ref.query(f'full_id == "{full_id}"').loc[:, :]
+    my_ref = ref.query(f'full_id == "{full_id}"')
     # required variables can't be changed by update entry
-    req_vars = ['subject_id', 'unit_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type']
     other_ref = ref.query(f'full_id != "{full_id}"')
     # Only supplementary information can be changed
-    feats = set(vals.keys()) - set(req_vars)
-    for f in feats:
+    new_feats = set(vals.keys()) - set(req_vars())
+    for f in new_feats:
         my_ref = check_and_replace(my_ref, f, vals[f'{f}'])
-    ref_full = pd.concat([other_ref, my_ref])
+    ref_full = pd.concat([other_ref, my_ref], ignore_index=True)
     ref_full = ref_full.replace(np.nan, '')
     return ref_full
 
@@ -294,8 +296,7 @@ def add_files(urls, ft, sid, uid, fid, vals):
                'date_downloaded': [str(date.today())] * n,
                'md5': m5,
                'type': ft}
-    req_vars = ['subject_id', 'unit_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type']
-    feats = set(vals.keys()) - set(req_vars)
+    feats = set(vals.keys()) - set(req_vars())
     for f in feats:
         new_ref[f'{f}'] = [vals[f'{f}']] * n
     new_ref = pd.DataFrame(new_ref)
@@ -307,24 +308,32 @@ def run_one_study(args, ref, inp_features, config):
         ref = update_entry(ref, full_id, inp_features)
         if len(args.url_plus)>0:
             ft = ["associated"]*len(args.url_plus)
+            new_features = inp_features.keys()
+            print(new_features)
+            print(req_vars())
+            other_features = (set(ref.columns) - set(req_vars())) - set(new_features)
+            print(other_features)
+            my_ref = ref.query(f'full_id == "{full_id}"')
+            for f in other_features:
+                inp_features[f'{f}'] = my_ref[f'{f}'].iloc[0]
             new_ref = add_files(args.url_plus, ft, args.subject_id, args.unit_id, full_id, inp_features)
-            ref = pd.concat([ref, new_ref])
+            ref = pd.concat([ref, new_ref], ignore_index=True)
             ref = ref.replace(np.nan, '')
     else:
         sid, uid, fid = init_entry(args, ref, inp_features, config['subject_id'], config['unit_id'])
         urls = [args.url] + args.url_plus
         ft = ["main"] + ["associated"]*len(args.url_plus)
         new_ref = add_files(urls, ft, sid, uid, fid, inp_features)
-        ref = pd.concat([ref, new_ref])
+        ref = pd.concat([ref, new_ref], ignore_index=True)
         ref = ref.replace(np.nan, '')
     return ref
 
 def validate_index(ref):
-    req_vars = ['subject_id', 'unit_id', 'full_id', 'file', 'date_downloaded', 'md5', 'type']
-    if any([i not in ref.columns for i in req_vars]):
+    rv = req_vars()
+    if any([i not in ref.columns for i in rv]):
         raise Exception(f'Reference file is missing at least one of the required columns: subject_id, unit_id, full_id, \
                           file, date_downloaded md5, and type.')
-    for v in req_vars:
+    for v in rv:
         if any(ref[f'{v}'].isnull()):
             raise Exception(f'Reference file has missing information in {v} which is a required column.')
     #Check for duplicated files or uls
@@ -348,15 +357,15 @@ if __name__ == '__main__':
         ref = run_one_study(args, ref, inp_features=inp_feats, config=config)
         ref.to_csv(args.index[0], index=False)
     elif args.csv:
-        req_vars = ['subject_id', 'unit_id', 'full_id', 'url', 'url_assoc']
-        add_ref = read_add(args.csv, req_vars)
-        adtl_features = set(add_ref.columns) - set(req_vars)
-        illegal_vars = ['file', 'date_downloaded', 'md5', 'type']
+        rv_in = ['subject_id', 'unit_id', 'full_id', 'url', 'url_assoc']
+        add_ref = read_add(args.csv, rv_in)
+        adtl_features = set(add_ref.columns) - set(rv_in)
+        illegal_vars = set(req_vars()) - set(rv_in)
         if any([i in illegal_vars for i in adtl_features]):
             raise Exception("Illegal features present in {args.csv}.")
         for i in range(len(add_ref)):
             my_line = add_ref.loc[i, :]
-            my_args = my_line[req_vars]
+            my_args = my_line[rv_in]
             if my_args.url_assoc == '':
                 my_args.url_plus = []
             else:
