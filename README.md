@@ -6,6 +6,32 @@ GWAS summary statistics and other products of scientific studies but should be
 flexible enough to use for other applications. 
 
 
+## Installation
+
+To install, simply clone this repository to the directory you would like to track.
+The only necessary files is `track_dir.py`. `get_stats.py` is an older version
+in which all of the features are hardcoded. Files `config.yaml` and `new_studies.csv`
+are used in the examples below. You may want to keep `config.yaml` or a 
+modified version of it while `new_studies.csv` is purely exemplary.
+
+Detailed installation insructions:
+```angular2html
+git clone https://github.com/jean997/gwas_file_tracker.git
+```
+will create a directory called `gwas_file_tracker`. You can then copy `gwas_file_tracker/track_dir.py`
+and `gwas_file_tracker/config.yaml` to your working directory. 
+If you would like to run examples in this readme, also copy `new_studies.csv`.
+
+
+Using the utility requires the `wget` and `pyyaml` python packages 
+which can be installed with 
+
+```
+pip install wget
+pip install pyyaml
+```
+
+
 ## Overview
 
 The intention of this utility is that it will be used to simultaneously download files and
@@ -38,6 +64,11 @@ python track_dir.py my_reference.csv \
 This will create a random subject and unit id, download the file and create a reference file called
 my_reference.csv containing the relevant information.  Data are always saved in a directory 
 corresponding to the subject ID.
+
+If the reference file does not exist when you run the utility, it will be 
+created. If it does exist, some basic checks will be performed. The reference
+will then be copied to a backup which can be used in case something goes wrong. 
+Backups need not be kept.
 
 #### Features
 Features are additional information stored in the reference file. Features can be supplied with the
@@ -143,15 +174,12 @@ python track_dir.py my_reference.csv --check-directory
 
 The `--check-directory` command can be combined with other commands. The result of this command
 will be a report file named `report.<datetime>` and some summary output to the screen.
+This command will ignore files in the top level directory.
 
-Using the utility requires the `wget` python package which can be installed with 
 
-```
-pip install wget
-```
-
+## Notes for Jean
 To do: 
 + Add directory checker to check consistency of directory contents and index file. (done)
 + Add `--from-file` option for get\_stats (done)
 + Make file features more flexible (done)
-+ Add file name prefix
++ Add file name prefix (done)
