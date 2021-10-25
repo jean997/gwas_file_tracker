@@ -221,7 +221,7 @@ def get_files(urls, dest_dir):
 # ref should have already been validated by the time it gets here
 # vals should be a dictionary of supplementary features
 def update_entry(ref, full_id, vals):
-    my_idx = ref.query(f'full_id == "{full_id}"').index().to_list()
+    my_idx = ref.query(f'full_id == "{full_id}"').index.to_list()
     # required variables can't be changed by update entry
     # other_ref = ref.query(f'full_id != "{full_id}"')
     # Only supplementary information can be changed
@@ -309,8 +309,8 @@ def run_one_study(args, ref, inp_features, config):
         if len(args.url_plus)>0:
             ft = ["associated"]*len(args.url_plus)
             new_features = inp_features.keys()
-            print(new_features)
-            print(req_vars())
+            #print(new_features)
+            #print(req_vars())
             other_features = (set(ref.columns) - set(req_vars())) - set(new_features)
             print(other_features)
             my_ref = ref.query(f'full_id == "{full_id}"')
