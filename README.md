@@ -35,17 +35,19 @@ pip install pyyaml
 ## Overview
 
 The intention of this utility is that it will be used to simultaneously download files and
-document them in a master reference which documents the contents of its directory. 
-Data are organized into subjects and units. Each subject may contain multiple units. 
-Each unit contains one "main" file and any number of associated files. When `track_downloads` is 
-used to add files to the directory, files will be downloaded and an entry added to the reference
-file containing the url, date of download, filename, and md5 checksum. Optionally, additional 
+document them in a master reference file.
+The reference file will contain one line for each file 
+recording the url, date of download, filename, and md5 checksum. Optionally, additional
 features can be stored in the reference file such as pmid for the accompanying publication, 
-trait or topic, etc.
+trait or topic, sample size, etc.
 
-I like to have the subject level of organization correspond to the study or paper and the unit level
-correspond to a single trait or analysis. This of course is flexible depending on your application. 
-
+Data are organized in two levels. The first level "subject" determines the directory sub-structure -- 
+all files belonging to the same subject will be kept in a directory named for the subject ID.
+For my purposes, I like to have subject correspond to the study or paper that data are from.
+The second level "unit" corresponds to the major data unit (in the case of 
+GWAS summary stiatistcs, usually trait). Each unit can contain one "main" file and any number 
+of "associated" files such as readmes or index files.
+Each subject can contain any number of units.
 
 ## Usage
 
@@ -56,12 +58,12 @@ python track_downloads.py -h
 
 `track_downloads` can be used in four modes:
 
-1. Add files for a single new unit
+1. Download and document files for a single new unit
 2. Update feature information for an existing unit and/or add associated files for an existing unit.
-3. Add new units or update existing units for many units using information stored in a .csv file.
-4. Check that the contents of the directory are documented in the reference file.
+3. Add new units or update existing units in bulk using information stored in a .csv file.
+4. Check that the contents of the directory and the reference file are in agreement.
 
-The following examples use tiny files and made up annotations. There is an example using real
+The following examples use tiny files and made up feature annotations. There is an example using 
 GWAS summary statistics at the end.
 
 ### 1. Add files for a single new unit
@@ -72,22 +74,24 @@ python track_downloads.py my_reference.csv \
       --url https://github.com/jean997/gwas_file_tracker/blame/main/test_files/one.txt
 ```
 
-This will create a random subject and unit id, download the file and create a reference file called
-my_reference.csv containing the relevant information.  Data are always saved in a directory 
-corresponding to the subject ID.
+Since no other information is supplied, the program will create a random subject and unit id. 
+It will then download the file from the provided URL, create a reference file called
+`my_reference.csv` if it does not already exist, 
+and store information the downloaded file.
 
 If the reference file does not exist when you run the utility, it will be 
 created. If it does exist, some basic checks will be performed. The reference
 will then be copied to a backup which can be used in case something goes wrong. 
-Backups need not be kept.
+Backups need not be kept long-term.
 
 #### Features
+
 Features are additional information stored in the reference file. Features can be supplied with the
 `--features` argument. The `--features` argument takes a white space separated list with elements of the
 form feature:value. If value contains whitespace, surround the entire entry in quotes. Feature
 names may not contain whitespace.
 
-Here we add features for author, trait and sample_size. 
+Here we add features for author, trait and sample_size to a new unit: 
 
 ```angular2html
 python track_downloads.py my_reference.csv \
@@ -116,8 +120,9 @@ subject_id:
 unit_id: 
         - trait
 ```
-If these features are present, then the subject ID will be formed as author_year_pmid and the 
-unit id will be trait. Spaces are replaced by - when forming IDs in this way. If the above text is
+Using this config file, if these features are present, 
+then the subject ID will be formed as author_year_pmid and the 
+unit id will be trait. Spaces are replaced by `-` when forming IDs in this way. If the above text is
 saved to config.yaml, then we can run the following:
 
 ```angular2html
@@ -133,12 +138,12 @@ cat my_reference.csv
 
 This has created a new unit with subject ID `Jean_2021_0` and unit id `example-trait-three`. 
 Note that some of the features we just added (author and trait) already existed as columns in the
-reference because we added them previously but yeaar and pmid are new. When new features are added,
+reference because we added them previously but year and pmid are new. When new features are added,
 the value of the new feature for all existing units is set to missing in the reference file.
 This can be changed later using `--update-entry`.
 
 ### Updating and adding files to a unit
-Units can be updated to add new associated files or add or change feature information. 
+Units can be updated to add new associated files, or add or change feature information. 
 Note that subject and unit IDs are fixed and cannot be changed later, even if the feature
 information they were based on changes. The main file for each unit is also fixed. Units 
 can only have one file designated as main.
