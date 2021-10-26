@@ -200,6 +200,34 @@ will be a report file named `report.<datetime>` and some summary output to the s
 This command will ignore files in the top level directory.
 
 
+## Examples with GWAS Summary Statistics
+
+Below are some examples which will download and track GWAS summary statistics from various locations.
+
+From IEU Open GWAS Project:
+```angular2html
+python track_downloads gwas_reference.csv \
+--url https://gwas.mrcieu.ac.uk/files/ieu-b-40/ieu-b-40.vcf.gz \
+--url-assoc https://gwas.mrcieu.ac.uk/files/ieu-b-40/ieu-b-40.vcf.gz.tbi \
+--config config.yaml \
+--features: author:GIANT pmid:30124842 year:2018 "note: European ancestry" sample_size:681275 trait:BMI
+```
+Note that for IEU data, you need both the `vcv.gz` file and the index `.tbi` file.
+
+
+From the GWAS catalog:
+
+```angular2html
+python track_downloads gwas_reference.csv \
+--url http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST007001-GCST008000/GCST007557/BW3_EUR_summary_stats.txt.gz \
+--url-assoc http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST007001-GCST008000/GCST007557/Horikoshi_27680694_readme_file.docx \
+--config config.yaml \
+--features: author:Horikoshi pmid:27680694 year:2016 "note: European ancestry" "trait:birth weight"
+```
+
+Here we downloaded the readme as an associated file.
+
+
 ## Notes for Jean
 To do: 
 + Add directory checker to check consistency of directory contents and index file. (done)
