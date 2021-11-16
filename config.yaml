@@ -9,5 +9,3 @@ unit_id:
         - trait
 ignore_dirs:
         - formatted_data
-        - temp
-        - venv
