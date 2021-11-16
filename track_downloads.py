@@ -49,13 +49,15 @@ def get_args():
                               urls with or without white space. \
                               If --from-file is used, no other options may be supplied. Lines with url_main empty \
                               will  be interpreted as updates to existing entries.')
-    parser.add_argument('--remove', dest='remove', action=store_true,
+    parser.add_argument('--remove', dest='remove', action='store_true',
                         help='Remove supplied unit and individual ID. Files will be deleted and corresponding lines removed \
                         from reference file')
     parser.add_argument('--check-directory', dest='check', action='store_true',
                         help='Check the contents of the directory against the index file. Results will be written \
                                to a file named report.datetime. If used in combination with other options, directory \
                                check will be performed first')
+    parser.add_argument('--remove-missing', dest='check_remove', action='store_true',
+                        help='If checking directory, remove entries with no existing files.')
     parser.add_argument('--config', dest='config', help="YAML formatted configuration file")
     #args = parser.parse_args()
     #return args
@@ -171,14 +173,21 @@ def check_args(args, ref):
         if full_id not in ref.full_id.to_list():
             raise Exception('Requested IDs are not present in reference file.')
 
-def remove_entry(full_id, ref):
+    if args.check_remove and not args.check:
+        raise Exception('--remove-missing can only be used with --check-directory option.')
+
+
+def remove_entry(subject_id, unit_id, ref):
+    full_id = f'{subject_id}__{unit_id}'
     my_idx = ref.query(f'full_id == "{full_id}"').index.to_list()
     for i in my_idx:
         if os.path.exists(ref.file[i]):
             print(f'Deleting {ref.file[i]}')
             os.remove(ref.file[i])
         ref = ref.drop(i)
-    ref = ref.reset_index()
+    if os.path.exists(subject_id):
+        if len(os.listdir(subject_id)) == 0:
+            os.rmdir(subject_id)
     return ref
 
 
@@ -254,7 +263,7 @@ def update_entry(ref, full_id, vals):
     ref = ref.replace(np.nan, '')
     return ref
 
-def check_directory(ref, dir=".", report_file=''):
+def check_directory(ref, dir=".", report_file='', remove_missing = False):
     dirs = os.listdir(dir)
     doc_dirs = []
     undoc_dirs = []
@@ -308,6 +317,11 @@ def check_directory(ref, dir=".", report_file=''):
             f.writelines([f'\n{len(missing_files)} are documented but not present in directory:\n'])
             f.writelines([f'{ref.subject_id[i]}, {ref.unit_id[i]}: {ref.file[i]} \n' for i in missing_idx])
         print(f'Full report saved in {report_file}')
+    if remove_missing and len(missing_idx) > 0:
+        print('Removing entries for missing files.')
+        for i in missing_idx:
+            ref = remove_entry(ref.subject_id[i], ref.unit_id[i], ref)
+        ref.to_csv(args.index[0], index=False)
 
 
 def add_files(urls, ft, sid, uid, fid, vals):
@@ -379,11 +393,11 @@ if __name__ == '__main__':
     config = read_config(args.config)
     if args.remove:
         full_id = f'{args.subject_id}__{args.unit_id}'
-        ref = remove_entry(full_id, ref)
+        ref = remove_entry(args.subject_id, args.unit_id, ref)
         ref.to_csv(args.index[0], index=False)
     elif args.check:
         report_file = f'report.{"_".join(str(datetime.now()).split())}'
-        check_directory(ref, dir=".", report_file=report_file)
+        check_directory(ref, dir=".", report_file=report_file, remove_missing=args.check_remove)
     elif args.upd or args.url != '':
         #print(args.features)
         inp_feats = parse_features(args.features)
