@@ -49,6 +49,9 @@ def get_args():
                               urls with or without white space. \
                               If --from-file is used, no other options may be supplied. Lines with url_main empty \
                               will  be interpreted as updates to existing entries.')
+    parser.add_argument('--remove', dest='remove', action=store_true,
+                        help='Remove supplied unit and individual ID. Files will be deleted and corresponding lines removed \
+                        from reference file')
     parser.add_argument('--check-directory', dest='check', action='store_true',
                         help='Check the contents of the directory against the index file. Results will be written \
                                to a file named report.datetime. If used in combination with other options, directory \
@@ -100,10 +103,10 @@ def read_config(file):
 
 
 # Read index or create if not existing
-def read_index(file, upd, create_backup=True, default_features=()):
+def read_index(file, new_ok, create_backup=True, default_features=()):
     if not os.path.exists(file):
-        if upd:
-            raise Exception("Index file must exist if using --update-entry.")
+        if not new_ok:
+            raise Exception("Index file must exist if using --update-entry or --remove.")
         print(f'Creating new index in file {file}')
         tab = {'subject_id': [],
                'unit_id': [],
@@ -114,7 +117,7 @@ def read_index(file, upd, create_backup=True, default_features=()):
                'md5': [],
                'type': []}
         for f in default_features:
-            tab[f'{f}'] = []
+            tab[f] = []
         tab = pd.DataFrame(tab)
     else:
         if create_backup:
@@ -136,11 +139,11 @@ def read_add(file, req_feats):
     my_vars = ["subject_id", "unit_id", "url_assoc"] + req_feats
     for v in my_vars:
         if v not in new_dat.columns:
-            new_dat[f'{v}'] = ''
+            new_dat[v] = ''
     return new_dat
 
 def check_args(args, ref):
-    if args.url == '' and args.csv == '' and not args.upd and not args.check:
+    if args.url == '' and args.csv == '' and not args.upd and not args.check and not args.remove:
         raise Exception('You must specify one of --url, --from-file, --update-entry, or --check-directory.')
 
     if args.upd and len(args.url) > 0:
@@ -161,13 +164,31 @@ def check_args(args, ref):
         if args.subject_id == '' or args.unit_id == '':
             raise Exception('To update an entry, please supply subject id and unit id.')
 
+    if args.remove:
+        if args.subject_id == '' or args.unit_id == '':
+            raise Exception('To remove an entry, please supply subject id and unit id.')
+        full_id = f'{args.subject_id}__{args.unit_id}'
+        if full_id not in ref.full_id.to_list():
+            raise Exception('Requested IDs are not present in reference file.')
+
+def remove_entry(full_id, ref):
+    my_idx = ref.query(f'full_id == "{full_id}"').index.to_list()
+    for i in my_idx:
+        if os.path.exists(ref.file[i]):
+            print(f'Deleting {ref.file[i]}')
+            os.remove(ref.file[i])
+        ref = ref.drop(i)
+    ref = ref.reset_index()
+    return ref
+
+
 
 def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
     if args.subject_id == '':
         if len(subj_feats) > 0:
             if all([f in inp_features.keys() for f in subj_feats]):
-                if all([inp_features[f'{f}'] != '' for f in subj_feats]):
-                    args.subject_id = '_'.join([inp_features[f'{f}'] for f in subj_feats])
+                if all([inp_features[f] != '' for f in subj_feats]):
+                    args.subject_id = '_'.join([inp_features[f] for f in subj_feats])
     if args.subject_id == '':
        args.subject_id = 'download_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     args.subject_id = args.subject_id.replace(' ', '-')
@@ -175,7 +196,7 @@ def init_entry(args, ref, inp_features, subj_feats=(), unit_feats=()):
     if args.unit_id == "":
         if len(unit_feats) > 0:
             if all([f in inp_features.keys() for f in unit_feats]):
-                if all([inp_features[f'{f}'] != '' for f in unit_feats]):
+                if all([inp_features[f] != '' for f in unit_feats]):
                     args.unit_id = '_'.join([inp_features[f'{f}'] for f in unit_feats])
     if args.unit_id == '':
         args.unit_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
@@ -211,7 +232,8 @@ def get_files(urls, dest_dir):
     dirs = os.listdir()
     if dest_dir not in dirs:
         raise Exception("Cannot find study ID directory. Is something wrong?")
-    file_names = [wget.download(u, dest_dir) for u in urls]
+    cwd = os.getcwd()
+    file_names = [cwd + '/' + wget.download(u, dest_dir) for u in urls]
     res = [subprocess.run(f'md5sum "{f}"', capture_output=True, text=True, shell=True) for f in file_names]
     m5 = [r.stdout.split()[0] for r in res]
     return file_names, m5
@@ -268,6 +290,9 @@ def check_directory(ref, dir=".", report_file=''):
     missing_files = list(set(ref.file) - set(doc_files_ok))
     if len(missing_files) > 0:
         print(f'Some files are documented but not present.')
+        missing_idx = ref.query('file in @missing_files').index.to_list()
+    else:
+        missing_idx = []
     if len(report_file) >0:
         with open(report_file, "w") as f:
             f.writelines([f'Directory report written on {str(date.today())}\n\n',
@@ -280,6 +305,8 @@ def check_directory(ref, dir=".", report_file=''):
             f.writelines([f'{d}\n' for d in doc_files_notok])
             f.writelines([f'\n{len(undoc_files)} file which are undocumented:\n'])
             f.writelines([f'{d}\n' for d in undoc_files])
+            f.writelines([f'\n{len(missing_files)} are documented but not present in directory:\n'])
+            f.writelines([f'{ref.subject_id[i]}, {ref.unit_id[i]}: {ref.file[i]} \n' for i in missing_idx])
         print(f'Full report saved in {report_file}')
 
 
@@ -346,13 +373,18 @@ def validate_index(ref):
 if __name__ == '__main__':
     parser = get_args()
     args = parser.parse_args()
-    ref = read_index(args.index[0], args.upd) # validate is called at the end of read_index so we can now assume index is valid
+    new_ok = (not args.upd) and (not args.remove)
+    ref = read_index(args.index[0], new_ok) # validate is called at the end of read_index so we can now assume index is valid
     check_args(args, ref)
     config = read_config(args.config)
-    if args.check:
+    if args.remove:
+        full_id = f'{args.subject_id}__{args.unit_id}'
+        ref = remove_entry(full_id, ref)
+        ref.to_csv(args.index[0], index=False)
+    elif args.check:
         report_file = f'report.{"_".join(str(datetime.now()).split())}'
         check_directory(ref, dir=".", report_file=report_file)
-    if args.upd or args.url != '':
+    elif args.upd or args.url != '':
         #print(args.features)
         inp_feats = parse_features(args.features)
         ref = run_one_study(args, ref, inp_features=inp_feats, config=config)
