@@ -84,12 +84,12 @@ def parse_features(flist):
 
 def read_config(file):
     if file is None:
-        config = {'subject_id':[], 'unit_id':[]}
+        config = {'subject_id':[], 'unit_id':[], 'ignore_dirs':[]}
         return config
     with open(file) as f:
         config = yaml.load(f, Loader=SafeLoader)
 
-    if any([k not in ["subject_id", "unit_id"] for k in config.keys()]):
+    if any([k not in ["subject_id", "unit_id", "ignore_dirs"] for k in config.keys()]):
         raise Exception("Unrecognized features in config file.")
     if "subject_id" in config.keys():
         if not isinstance(config["subject_id"], list):
@@ -101,6 +101,11 @@ def read_config(file):
             raise Exception("unit_id should be a list in config file.")
     else:
         config["unit_id"] = []
+    if "ignore_dirs" in config.keys():
+        if not isinstance(config["ignore_dirs"], list):
+            raise Exception("ignore_dirs should be a list in config file.")
+    else:
+        config["ignore_dirs"] = []
     return config
 
 
@@ -263,8 +268,8 @@ def update_entry(ref, full_id, vals):
     ref = ref.replace(np.nan, '')
     return ref
 
-def check_directory(ref, dir=".", report_file='', remove_missing = False):
-    dirs = os.listdir(dir)
+def check_directory(ref, dir=".", report_file='', remove_missing = False, ignore_dirs = []):
+    dirs = list(set(os.listdir(dir)) - set(ignore_dirs))
     doc_dirs = []
     undoc_dirs = []
     while len(dirs) > 0:
@@ -397,7 +402,7 @@ if __name__ == '__main__':
         ref.to_csv(args.index[0], index=False)
     elif args.check:
         report_file = f'report.{"_".join(str(datetime.now()).split())}'
-        check_directory(ref, dir=".", report_file=report_file, remove_missing=args.check_remove)
+        check_directory(ref, dir=".", report_file=report_file, remove_missing=args.check_remove, ignore_dirs=config['ignore_dirs'])
     elif args.upd or args.url != '':
         #print(args.features)
         inp_feats = parse_features(args.features)
