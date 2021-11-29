@@ -432,6 +432,7 @@ if __name__ == '__main__':
             my_args.upd = my_args.url == ''
             my_args.check = False
             my_args.remove = False
+            my_args.check_remove = False
             check_args(my_args, ref)
             inp_features = my_line[adtl_features].to_dict()
             ref = run_one_study(my_args, ref, inp_features=inp_features, config=config)
