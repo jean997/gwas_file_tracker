@@ -394,7 +394,8 @@ if __name__ == '__main__':
     parser = get_args()
     args = parser.parse_args()
     new_ok = (not args.upd) and (not args.remove)
-    ref = read_index(args.index[0], new_ok) # validate is called at the end of read_index so we can now assume index is valid
+    backup = not args.check
+    ref = read_index(args.index[0], new_ok=new_ok, create_backup=backup) # validate is called at the end of read_index so we can now assume index is valid
     check_args(args, ref)
     config = read_config(args.config)
     if args.remove:
