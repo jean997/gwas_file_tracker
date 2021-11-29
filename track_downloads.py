@@ -50,8 +50,8 @@ def get_args():
                               If --from-file is used, no other options may be supplied. Lines with url_main empty \
                               will  be interpreted as updates to existing entries.')
     parser.add_argument('--remove', dest='remove', action='store_true',
-                        help='Remove supplied unit and individual ID. Files will be deleted and corresponding lines removed \
-                        from reference file')
+                        help='Remove supplied unit and individual ID. Files will be deleted and corresponding \
+                        lines removed from reference file')
     parser.add_argument('--check-directory', dest='check', action='store_true',
                         help='Check the contents of the directory against the index file. Results will be written \
                                to a file named report.datetime. If used in combination with other options, directory \
@@ -59,6 +59,8 @@ def get_args():
     parser.add_argument('--remove-missing', dest='check_remove', action='store_true',
                         help='If checking directory, remove entries with no existing files.')
     parser.add_argument('--config', dest='config', help="YAML formatted configuration file")
+    parser.add_argument('--no-backup', dest='nb', action='store_true',
+                        help="Do not create a backup file (default False).")
     #args = parser.parse_args()
     #return args
     return parser
@@ -394,7 +396,7 @@ if __name__ == '__main__':
     parser = get_args()
     args = parser.parse_args()
     new_ok = (not args.upd) and (not args.remove)
-    backup = not args.check
+    backup = not (args.check or args.nb)
     ref = read_index(args.index[0], new_ok=new_ok, create_backup=backup) # validate is called at the end of read_index so we can now assume index is valid
     check_args(args, ref)
     config = read_config(args.config)
