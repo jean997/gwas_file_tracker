@@ -296,6 +296,8 @@ def check_directory(ref, dir=".", report_file='', remove_missing = False, ignore
                 print(f'{f} is undocumented')
                 undoc_files.append(f)
             else:
+                if f'{cwd}/{f}' in ref.file.to_list():
+                    f = f'{cwd}/{f}'
                 m5out = subprocess.run(f'md5sum "{f}"', capture_output=True, text=True, shell=True)
                 m5 = m5out.stdout.split()[0]
                 i = list(ref.file).index(f)
