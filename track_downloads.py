@@ -283,13 +283,14 @@ def check_directory(ref, dir=".", report_file='', remove_missing = False, ignore
     doc_files_ok = []
     doc_files_notok = []
     undoc_files = []
+    cwd = os.getcwd()
     for d in doc_dirs:
         fls = []
         for root, dirs, files in os.walk(d):
             my_fls = [f'{root}/{f}' for f in files]
             fls.extend(my_fls)
         for f in fls:
-            if not f in ref.file.to_list():
+            if not f in ref.file.to_list() and not f'{cwd}/{f}' in ref.file.to_list():
                 print(f'{f} is undocumented')
                 undoc_files.append(f)
             else:
