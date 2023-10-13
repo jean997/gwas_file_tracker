@@ -43,11 +43,11 @@ def get_args():
                              cannot be modified.')
     parser.add_argument('--from-file', dest='csv', default='',
                         help='Add files from information stored in a csv. The file should contain at minimum a column \
-                              url for main url.  Optional additional columns are: url_assoc, pmid, author, year, trait, \
+                              url for main url.  Optional additional columns are: url, url_assoc, pmid, author, year, trait, \
                               sample_size, note, subject_id, unit_id. \
                               All other columns will be ignored. url_assoc can contain a comma separated list of \
                               urls with or without white space. \
-                              If --from-file is used, no other options may be supplied. Lines with url_main empty \
+                              If --from-file is used, no other options may be supplied. Lines with url empty \
                               will  be interpreted as updates to existing entries.')
     parser.add_argument('--remove', dest='remove', action='store_true',
                         help='Remove supplied unit and individual ID. Files will be deleted and corresponding \
